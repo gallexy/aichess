@@ -1,0 +1,5 @@
+{
+  "name": "Grandmaster AI - Chess Tutor",
+  "description": "An interactive chess teaching application featuring a fully functional board, move validation, timers, history, and an integrated AI Coach powered by Gemini to explain moves and strategies.",
+  "requestFramePermissions": []
+}

@@ -1,0 +1,48 @@
+export type PlayerColor = 'w' | 'b';
+
+export interface GameState {
+  fen: string;
+  turn: PlayerColor;
+  isCheck: boolean;
+  isCheckmate: boolean;
+  isDraw: boolean;
+  isGameOver: boolean;
+  history: string[];
+}
+
+export interface MoveData {
+  from: string;
+  to: string;
+  promotion?: string;
+}
+
+export interface CoachResponse {
+  advice: string;
+  analysis: string;
+}
+
+export interface EngineEvaluation {
+  type: 'cp' | 'mate';
+  value: number;
+}
+
+export interface EngineLine {
+  id?: number;
+  move: string;
+  evaluation: EngineEvaluation;
+}
+
+export interface EngineResponse {
+  best_move: string;
+  evaluation: EngineEvaluation;
+  depth: number;
+  // Optional array if API returns multiple lines (MultiPV)
+  top_lines?: EngineLine[]; 
+  continuation?: string[]; 
+}
+
+export interface Arrow {
+  from: string;
+  to: string;
+  color: string;
+}

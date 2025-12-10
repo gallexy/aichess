@@ -1,0 +1,69 @@
+import React, { useEffect, useRef } from 'react';
+import { ScrollText } from 'lucide-react';
+
+interface MoveListProps {
+  moves: string[];
+}
+
+const MoveList: React.FC<MoveListProps> = ({ moves }) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [moves]);
+
+  // Group moves into pairs (White, Black)
+  const movePairs = [];
+  for (let i = 0; i < moves.length; i += 2) {
+    movePairs.push({
+      index: Math.floor(i / 2) + 1,
+      white: moves[i],
+      black: moves[i + 1] || '',
+    });
+  }
+
+  return (
+    <div className="bg-slate-800 rounded-xl border border-slate-700 flex flex-col h-full overflow-hidden shadow-lg">
+      <div className="p-4 border-b border-slate-700 bg-slate-800/50 flex items-center space-x-2">
+        <ScrollText className="w-5 h-5 text-emerald-400" />
+        <h2 className="font-bold text-white">Move History</h2>
+      </div>
+      
+      <div 
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto p-0 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent"
+      >
+        <table className="w-full text-sm text-left">
+          <thead className="text-xs text-slate-400 uppercase bg-slate-900/50 sticky top-0">
+            <tr>
+              <th className="px-4 py-2 w-16">#</th>
+              <th className="px-4 py-2">White</th>
+              <th className="px-4 py-2">Black</th>
+            </tr>
+          </thead>
+          <tbody>
+            {movePairs.length === 0 ? (
+              <tr>
+                <td colSpan={3} className="px-4 py-8 text-center text-slate-500 italic">
+                  Game hasn't started yet
+                </td>
+              </tr>
+            ) : (
+              movePairs.map((pair) => (
+                <tr key={pair.index} className="border-b border-slate-700/50 hover:bg-slate-700/50 transition-colors">
+                  <td className="px-4 py-2 text-slate-500 font-mono">{pair.index}.</td>
+                  <td className="px-4 py-2 text-slate-200 font-medium">{pair.white}</td>
+                  <td className="px-4 py-2 text-slate-200 font-medium">{pair.black}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+export default MoveList;
