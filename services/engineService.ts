@@ -1,33 +1,33 @@
 import { EngineResponse, EngineLine } from '../types';
 
 // Strategy:
-// 1. Primary: chess-api.com (Reliable, fast, standard API)
-// 2. Secondary: stockfish.gallexy.dev (User Custom Server - Supports variations/MultiPV)
+// 1. Primary: stockfish.gallexy.dev (User Custom Server - Supports variations/MultiPV)
+// 2. Secondary: chess-api.com (Reliable fallback)
 // 3. Tertiary: stockfish.online (Public fallback)
 
-const PRIMARY_API_URL = 'https://chess-api.com/v1';
-const SECONDARY_API_URL = 'https://stockfish.gallexy.dev/api/best-move';
+const PRIMARY_API_URL = 'https://stockfish.gallexy.dev/api/best-move';
+const SECONDARY_API_URL = 'https://chess-api.com/v1';
 const TERTIARY_API_URL = 'https://stockfish.online/api/s/v2.php';
 
-export const getBestMove = async (fen: string, depth: number = 15): Promise<EngineResponse> => {
-  // 1. Attempt Chess API (Primary)
+export const getBestMove = async (fen: string, depth: number = 15, multipv: number = 3): Promise<EngineResponse> => {
+  // 1. Attempt Custom API (Primary)
   try {
-    console.log("Requesting Primary API (chess-api.com)...");
-    return await fetchChessApiCom(fen, depth);
+    return await fetchCustomAPI(fen, depth, multipv);
   } catch (e) {
-    console.warn("Primary API failed, switching to Secondary (Custom API)...", e);
+    console.warn("Primary API failed, switching to Secondary (Chess API)...", e);
   }
 
-  // 2. Attempt Custom API (Secondary)
+  // 2. Attempt Chess API (Secondary)
   try {
-    return await fetchCustomAPI(fen, depth);
+    // Chess API doesn't support MultiPV well, returns 1 line usually
+    return await fetchChessApiCom(fen, depth);
   } catch (e) {
     console.warn("Secondary API failed, switching to Tertiary (Stockfish Online)...", e);
   }
 
   // 3. Attempt Stockfish Online (Tertiary)
   try {
-    return await fetchStockfishOnline(fen, depth);
+    return await fetchStockfishOnline(fen, depth, multipv);
   } catch (e) {
     console.error("All engine services failed:", e);
   }
@@ -35,71 +35,18 @@ export const getBestMove = async (fen: string, depth: number = 15): Promise<Engi
   throw new Error("Engine calculation failed. Please check your internet connection.");
 };
 
-// --- Implementation 1: chess-api.com (Primary) ---
-const fetchChessApiCom = async (fen: string, depth: number): Promise<EngineResponse> => {
+// --- Implementation 1: Custom API (Primary) ---
+const fetchCustomAPI = async (fen: string, depth: number, multipv: number): Promise<EngineResponse> => {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000);
+  const timeoutId = setTimeout(() => controller.abort(), 8000); 
 
   try {
     const response = await fetch(PRIMARY_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        // chess-api.com standard body.
-        body: JSON.stringify({ fen, depth: Math.min(depth, 30) }),
-        signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-
-    if (!response.ok) throw new Error(`Chess API Error: ${response.status}`);
-    const data = await response.json();
-
-    // Expected format: { move: "e2e4", eval: 35, mate: null, depth: 15, text: "...", continuation: [...] }
-    if (!data.move) throw new Error("Invalid response from Chess API");
-
-    let type: 'cp' | 'mate' = 'cp';
-    let value = 0;
-
-    if (data.mate !== null && data.mate !== undefined) {
-        type = 'mate';
-        value = data.mate;
-    } else {
-        type = 'cp';
-        // chess-api.com documentation states evaluation is in centipawns (e.g. 35 for 0.35 pawns)
-        // Ensure it's an integer
-        value = Math.round(data.eval || 0);
-    }
-
-    const line: EngineLine = {
-        id: 1,
-        move: data.move,
-        evaluation: { type, value }
-    };
-
-    return {
-        best_move: data.move,
-        evaluation: { type, value },
-        depth: data.depth || depth,
-        top_lines: [line],
-        continuation: data.continuation || []
-    };
-  } catch (error) {
-    clearTimeout(timeoutId);
-    throw error;
-  }
-};
-
-// --- Implementation 2: Custom API (Secondary) ---
-const fetchCustomAPI = async (fen: string, depth: number): Promise<EngineResponse> => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000); 
-
-  try {
-    const response = await fetch(SECONDARY_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ fen, depth, multipv: 3 }),
+      body: JSON.stringify({ fen, depth, multipv: multipv }),
       signal: controller.signal
     });
     clearTimeout(timeoutId);
@@ -149,8 +96,58 @@ const fetchCustomAPI = async (fen: string, depth: number): Promise<EngineRespons
   }
 };
 
+// --- Implementation 2: chess-api.com (Secondary) ---
+const fetchChessApiCom = async (fen: string, depth: number): Promise<EngineResponse> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const response = await fetch(SECONDARY_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // chess-api.com standard body.
+        body: JSON.stringify({ fen, depth: Math.min(depth, 30) }),
+        signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) throw new Error(`Chess API Error: ${response.status}`);
+    const data = await response.json();
+
+    if (!data.move) throw new Error("Invalid response from Chess API");
+
+    let type: 'cp' | 'mate' = 'cp';
+    let value = 0;
+
+    if (data.mate !== null && data.mate !== undefined) {
+        type = 'mate';
+        value = data.mate;
+    } else {
+        type = 'cp';
+        value = Math.round(data.eval || 0);
+    }
+
+    const line: EngineLine = {
+        id: 1,
+        move: data.move,
+        evaluation: { type, value }
+    };
+
+    return {
+        best_move: data.move,
+        evaluation: { type, value },
+        depth: data.depth || depth,
+        top_lines: [line],
+        continuation: data.continuation || []
+    };
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
+};
+
 // --- Implementation 3: stockfish.online (Tertiary) ---
-const fetchStockfishOnline = async (fen: string, depth: number): Promise<EngineResponse> => {
+const fetchStockfishOnline = async (fen: string, depth: number, multipv: number): Promise<EngineResponse> => {
   const safeDepth = Math.min(depth, 12); 
   const url = `${TERTIARY_API_URL}?fen=${encodeURIComponent(fen)}&depth=${safeDepth}&mode=lines`;
 
@@ -164,7 +161,7 @@ const fetchStockfishOnline = async (fen: string, depth: number): Promise<EngineR
   }
 
   const topLines: EngineLine[] = [];
-  data.lines.slice(0, 3).forEach((item: any, index: number) => {
+  data.lines.slice(0, multipv).forEach((item: any, index: number) => {
       const move = cleanMove(item.move);
       if (!move) return;
       const evaluation = parseScoreStandard(item.score);

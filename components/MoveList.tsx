@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { ScrollText } from 'lucide-react';
+import { ScrollText, Download } from 'lucide-react';
 
 interface MoveListProps {
   moves: string[];
@@ -24,11 +24,40 @@ const MoveList: React.FC<MoveListProps> = ({ moves }) => {
     });
   }
 
+  const handleDownloadPgn = () => {
+    if (moves.length === 0) return;
+
+    let pgn = "";
+    movePairs.forEach(pair => {
+      pgn += `${pair.index}. ${pair.white} ${pair.black} `;
+    });
+
+    const blob = new Blob([pgn], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `game-${new Date().toISOString().slice(0, 10)}.pgn`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="bg-slate-800 rounded-xl border border-slate-700 flex flex-col h-full overflow-hidden shadow-lg">
-      <div className="p-4 border-b border-slate-700 bg-slate-800/50 flex items-center space-x-2">
-        <ScrollText className="w-5 h-5 text-emerald-400" />
-        <h2 className="font-bold text-white">Move History</h2>
+      <div className="p-4 border-b border-slate-700 bg-slate-800/50 flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <ScrollText className="w-5 h-5 text-emerald-400" />
+          <h2 className="font-bold text-white">Move History</h2>
+        </div>
+        <button 
+          onClick={handleDownloadPgn}
+          disabled={moves.length === 0}
+          className="p-1.5 bg-slate-700 hover:bg-slate-600 rounded text-slate-300 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          title="Save Game (PGN)"
+        >
+          <Download className="w-4 h-4" />
+        </button>
       </div>
       
       <div 

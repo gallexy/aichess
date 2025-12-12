@@ -9,9 +9,22 @@ interface ChessBoardProps {
   arrows?: Arrow[];
 }
 
-const PIECE_SYMBOLS: Record<string, string> = {
-  'p': '♟', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚',
-  'P': '♙', 'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔'
+// Standard SVG Chess Pieces (Cburnett style - similar to Lichess/Wikipedia)
+const PIECE_IMAGES: Record<string, string> = {
+  // White
+  'wp': 'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg',
+  'wn': 'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg',
+  'wb': 'https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg',
+  'wr': 'https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg',
+  'wq': 'https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg',
+  'wk': 'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg',
+  // Black
+  'bp': 'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg',
+  'bn': 'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg',
+  'bb': 'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg',
+  'br': 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg',
+  'bq': 'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg',
+  'bk': 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg',
 };
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
@@ -105,7 +118,8 @@ const ChessBoard: React.FC<ChessBoardProps> = ({ game, onMove, orientation = 'w'
   };
 
   return (
-    <div className="w-full max-w-[600px] aspect-square select-none shadow-2xl rounded-lg overflow-hidden border-4 border-[#b58863] relative">
+    // REMOVED max-w-[1125px], now relies on parent container.
+    <div className="w-full aspect-square select-none shadow-2xl rounded-lg overflow-hidden border-4 border-[#b58863] relative">
       <div className="w-full h-full grid grid-cols-8 grid-rows-8 relative z-0">
         {displayRanks.map((rank, rIndex) => (
           displayFiles.map((file, fIndex) => {
@@ -130,12 +144,12 @@ const ChessBoard: React.FC<ChessBoardProps> = ({ game, onMove, orientation = 'w'
               >
                 {/* Labels */}
                 {fIndex === 0 && (
-                   <span className={`absolute left-0.5 top-0.5 text-[10px] font-bold ${isDark(rIndex, fIndex) ? 'text-[#f0d9b5]' : 'text-[#b58863]'}`}>
+                   <span className={`absolute left-0.5 top-0.5 text-[10px] sm:text-sm font-bold ${isDark(rIndex, fIndex) ? 'text-[#f0d9b5]' : 'text-[#b58863]'}`}>
                      {rank}
                    </span>
                 )}
                 {rIndex === 7 && (
-                   <span className={`absolute right-0.5 bottom-0 text-[10px] font-bold ${isDark(rIndex, fIndex) ? 'text-[#f0d9b5]' : 'text-[#b58863]'}`}>
+                   <span className={`absolute right-0.5 bottom-0 text-[10px] sm:text-sm font-bold ${isDark(rIndex, fIndex) ? 'text-[#f0d9b5]' : 'text-[#b58863]'}`}>
                      {file}
                    </span>
                 )}
@@ -148,19 +162,16 @@ const ChessBoard: React.FC<ChessBoardProps> = ({ game, onMove, orientation = 'w'
                    <div className="absolute w-full h-full border-[6px] border-black/10 rounded-full pointer-events-none" />
                 )}
 
-                {/* Piece */}
+                {/* Piece Image - INCREASED SIZE to w-full h-full with small padding */}
                 {piece && (
-                  <span 
-                    className={`
-                      text-5xl sm:text-6xl leading-none select-none drop-shadow-md transform transition-transform duration-100 hover:scale-110 z-10
-                      ${piece.color === 'w' ? 'text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]' : 'text-black drop-shadow-[0_2px_2px_rgba(255,255,255,0.5)]'}
-                    `}
-                    style={{ 
-                      filter: piece.color === 'b' ? 'drop-shadow(0 1px 1px rgba(0,0,0,0.5))' : 'drop-shadow(0 2px 3px rgba(0,0,0,0.4))'
-                    }}
-                  >
-                    {PIECE_SYMBOLS[piece.color === 'w' ? piece.type.toUpperCase() : piece.type]}
-                  </span>
+                  <div className="w-full h-full p-0.5 flex items-center justify-center">
+                    <img
+                      src={PIECE_IMAGES[`${piece.color}${piece.type}`]}
+                      alt={`${piece.color}${piece.type}`}
+                      className="w-full h-full object-contain select-none transform transition-transform duration-100 hover:scale-110 z-10 drop-shadow-sm"
+                      draggable={false}
+                    />
+                  </div>
                 )}
               </div>
             );

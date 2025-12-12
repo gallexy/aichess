@@ -68,7 +68,7 @@ const AICoach: React.FC<AICoachProps> = ({ fen, turn, history, onAnalysisUpdate 
 
     } catch (e) {
       console.error(e);
-      setError("引擎启动失败");
+      setError("Engine failed to start");
     } finally {
       setEngineLoading(false);
     }
@@ -91,7 +91,7 @@ const AICoach: React.FC<AICoachProps> = ({ fen, turn, history, onAnalysisUpdate 
         setAdvice(text);
     } catch (e) {
         console.error(e);
-        setError("AI 分析失败");
+        setError("AI Analysis failed");
     } finally {
         setAiLoading(false);
     }
@@ -107,7 +107,7 @@ const AICoach: React.FC<AICoachProps> = ({ fen, turn, history, onAnalysisUpdate 
       <div className="p-4 border-b border-slate-700 bg-slate-800/50 flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <Sparkles className="w-5 h-5 text-purple-400" />
-          <h2 className="font-bold text-white">AI 助手</h2>
+          <h2 className="font-bold text-white">AI Assistant</h2>
         </div>
         <button
           onClick={handleCalculateMove}
@@ -117,12 +117,12 @@ const AICoach: React.FC<AICoachProps> = ({ fen, turn, history, onAnalysisUpdate 
           {engineLoading ? (
             <>
               <RefreshCw className="w-3 h-3 animate-spin" />
-              <span>计算中...</span>
+              <span>Calculating...</span>
             </>
           ) : (
             <>
               <Zap className="w-3 h-3" />
-              <span>计算最佳着法</span>
+              <span>Calculate Best Move</span>
             </>
           )}
         </button>
@@ -141,7 +141,7 @@ const AICoach: React.FC<AICoachProps> = ({ fen, turn, history, onAnalysisUpdate 
         {!engineData && !engineLoading && !advice && !aiLoading && (
            <div className="flex flex-col items-center justify-center text-slate-500 text-center py-8">
               <Cpu className="w-10 h-10 mb-2 opacity-20" />
-              <p className="text-sm">点击上方按钮让引擎计算最佳走法。</p>
+              <p className="text-sm">Click the button above to calculate the best move.</p>
            </div>
         )}
 
@@ -151,7 +151,7 @@ const AICoach: React.FC<AICoachProps> = ({ fen, turn, history, onAnalysisUpdate 
              <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center space-x-2 text-orange-400">
                     <Cpu className="w-4 h-4" />
-                    <h3 className="text-sm font-bold uppercase tracking-wider">引擎推荐</h3>
+                    <h3 className="text-sm font-bold uppercase tracking-wider">Engine Suggestion</h3>
                 </div>
                 <span className="text-xs text-slate-500">Depth: {engineData.depth}</span>
              </div>
@@ -192,7 +192,7 @@ const AICoach: React.FC<AICoachProps> = ({ fen, turn, history, onAnalysisUpdate 
                     className="group flex items-center space-x-2 text-sm bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-5 py-2 rounded-lg shadow-md transition-all border border-purple-500/30"
                 >
                     <Sparkles className="w-4 h-4 group-hover:animate-pulse" />
-                    <span>大师深度解析</span>
+                    <span>Grandmaster Feedback</span>
                 </button>
             </div>
         )}
@@ -202,7 +202,7 @@ const AICoach: React.FC<AICoachProps> = ({ fen, turn, history, onAnalysisUpdate 
            <div className="space-y-3 animate-pulse pt-2">
               <div className="flex items-center space-x-2 text-purple-400 mb-2">
                  <RefreshCw className="w-4 h-4 animate-spin" />
-                 <span className="text-xs font-bold">AI 大师正在思考...</span>
+                 <span className="text-xs font-bold">Grandmaster is thinking...</span>
               </div>
               <div className="h-4 bg-slate-800 rounded w-3/4"></div>
               <div className="h-4 bg-slate-800 rounded w-full"></div>
@@ -215,7 +215,7 @@ const AICoach: React.FC<AICoachProps> = ({ fen, turn, history, onAnalysisUpdate 
           <div className="bg-slate-800/40 rounded-lg p-3 border border-purple-500/20 mt-4 animate-in slide-in-from-bottom-2 duration-500">
              <div className="flex items-center space-x-2 text-purple-400 mb-2">
                 <MessageSquare className="w-4 h-4" />
-                <h3 className="text-sm font-bold uppercase tracking-wider">大师点评</h3>
+                <h3 className="text-sm font-bold uppercase tracking-wider">Master's Commentary</h3>
               </div>
             <div className="prose prose-invert prose-sm max-w-none text-slate-300 leading-relaxed">
               <ReactMarkdown>{advice}</ReactMarkdown>

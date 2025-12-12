@@ -46,3 +46,24 @@ export interface Arrow {
   to: string;
   color: string;
 }
+
+// Opening Explorer Types
+export interface ExplorerMove {
+  uci: string;
+  san: string;
+  white: number;
+  draws: number;
+  black: number;
+  averageRating: number;
+}
+
+export interface OpeningStats {
+  white: number;
+  draws: number;
+  black: number;
+  moves: ExplorerMove[];
+  opening?: {
+    eco: string;
+    name: string;
+  };
+}

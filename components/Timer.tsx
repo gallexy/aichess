@@ -6,9 +6,10 @@ interface TimerProps {
   isActive: boolean;
   onTimeout: () => void;
   label: string;
+  variant?: 'light' | 'dark';
 }
 
-const Timer: React.FC<TimerProps> = ({ initialTimeSeconds = 600, isActive, onTimeout, label }) => {
+const Timer: React.FC<TimerProps> = ({ initialTimeSeconds = 600, isActive, onTimeout, label, variant = 'dark' }) => {
   const [timeLeft, setTimeLeft] = useState(initialTimeSeconds);
 
   useEffect(() => {
@@ -36,15 +37,51 @@ const Timer: React.FC<TimerProps> = ({ initialTimeSeconds = 600, isActive, onTim
   };
 
   const isLowTime = timeLeft < 60;
+  const isLight = variant === 'light';
+
+  // Dynamic classes based on variant (light/dark) and state (active/inactive)
+  // Reduced padding (px-5 py-3 -> px-3 py-1) and min-width to make it shorter/compact
+  let containerClasses = "flex items-center space-x-2 px-3 py-1.5 rounded-lg border-2 transition-all duration-300 min-w-[130px] ";
+  
+  if (isLight) {
+      // Light Theme (White Background)
+      if (isActive) {
+          containerClasses += "bg-white border-emerald-500 shadow-[0_0_10px_rgba(255,255,255,0.3)] scale-105 z-10";
+      } else {
+          containerClasses += "bg-slate-200 border-slate-300 opacity-60 text-slate-500 grayscale";
+      }
+  } else {
+      // Dark Theme (Dark Background)
+      if (isActive) {
+          containerClasses += "bg-slate-800 border-emerald-500 shadow-[0_0_10px_rgba(0,0,0,0.5)] scale-105 z-10";
+      } else {
+          containerClasses += "bg-slate-900 border-slate-800 opacity-60 text-slate-500";
+      }
+  }
+
+  // Text Styling
+  const labelColor = isLight 
+    ? (isActive ? "text-slate-500" : "text-slate-400")
+    : (isActive ? "text-slate-400" : "text-slate-600");
+
+  // Reduced text size (text-3xl -> text-xl)
+  let timeColor = "text-xl font-mono font-bold tracking-tight ";
+  if (isLowTime) {
+      timeColor += "text-red-500";
+  } else {
+      timeColor += isLight ? "text-slate-900" : "text-white";
+  }
+
+  const iconColor = isLowTime && isActive
+     ? 'text-red-500 animate-pulse' 
+     : (isLight ? 'text-slate-400' : 'text-slate-600');
 
   return (
-    <div className={`flex items-center space-x-2 px-4 py-2 rounded-lg border transition-colors ${isActive 
-      ? 'bg-slate-700 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' 
-      : 'bg-slate-800 border-slate-700 opacity-70'}`}>
-      <Clock className={`w-5 h-5 ${isLowTime && isActive ? 'text-red-500 animate-pulse' : 'text-slate-400'}`} />
-      <div className="flex flex-col">
-        <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">{label}</span>
-        <span className={`text-2xl font-mono font-bold ${isLowTime ? 'text-red-400' : 'text-white'}`}>
+    <div className={containerClasses}>
+      <Clock className={`w-4 h-4 ${iconColor}`} />
+      <div className="flex flex-col leading-none justify-center">
+        <span className={`text-[9px] uppercase font-black tracking-widest ${labelColor}`}>{label}</span>
+        <span className={timeColor}>
           {formatTime(timeLeft)}
         </span>
       </div>
