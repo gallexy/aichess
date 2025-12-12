@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, RefreshCw, MessageSquare, Cpu, ArrowRight, AlertTriangle, Zap } from 'lucide-react';
-import { getChessAdvice } from '../services/geminiService';
+import { Sparkles, RefreshCw, MessageSquare, Cpu, ArrowRight, AlertTriangle, Zap, Volume2 } from 'lucide-react';
+import { getChessAdvice, speakAdvice } from '../services/geminiService';
 import { getBestMove } from '../services/engineService';
 import { EngineResponse, Arrow, EngineLine } from '../types';
 import ReactMarkdown from 'react-markdown';
@@ -89,12 +89,19 @@ const AICoach: React.FC<AICoachProps> = ({ fen, turn, history, onAnalysisUpdate 
 
         const text = await getChessAdvice(fen, turn, history, bestMoveStr, evalStr);
         setAdvice(text);
+        
+        // Auto-speak the summary of the advice
+        speakAdvice(text);
     } catch (e) {
         console.error(e);
         setError("AI Analysis failed");
     } finally {
         setAiLoading(false);
     }
+  };
+
+  const handleReplayVoice = () => {
+      if (advice) speakAdvice(advice);
   };
 
   // Helper for lines
@@ -212,11 +219,20 @@ const AICoach: React.FC<AICoachProps> = ({ fen, turn, history, onAnalysisUpdate 
 
         {/* Gemini Advice Section */}
         {advice && (
-          <div className="bg-slate-800/40 rounded-lg p-3 border border-purple-500/20 mt-4 animate-in slide-in-from-bottom-2 duration-500">
-             <div className="flex items-center space-x-2 text-purple-400 mb-2">
-                <MessageSquare className="w-4 h-4" />
-                <h3 className="text-sm font-bold uppercase tracking-wider">Master's Commentary</h3>
-              </div>
+          <div className="bg-slate-800/40 rounded-lg p-3 border border-purple-500/20 mt-4 animate-in slide-in-from-bottom-2 duration-500 relative">
+             <div className="flex items-center justify-between mb-2">
+                 <div className="flex items-center space-x-2 text-purple-400">
+                    <MessageSquare className="w-4 h-4" />
+                    <h3 className="text-sm font-bold uppercase tracking-wider">Coach</h3>
+                  </div>
+                  <button 
+                    onClick={handleReplayVoice}
+                    className="p-1 hover:bg-slate-700 rounded-full text-purple-400 hover:text-white transition-colors"
+                    title="Replay Audio"
+                  >
+                      <Volume2 className="w-4 h-4" />
+                  </button>
+             </div>
             <div className="prose prose-invert prose-sm max-w-none text-slate-300 leading-relaxed">
               <ReactMarkdown>{advice}</ReactMarkdown>
             </div>

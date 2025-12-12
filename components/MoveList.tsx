@@ -1,11 +1,12 @@
 import React, { useEffect, useRef } from 'react';
-import { ScrollText, Download } from 'lucide-react';
+import { ScrollText, Download, Star, AlertCircle, AlertTriangle } from 'lucide-react';
 
 interface MoveListProps {
   moves: string[];
+  moveQualities?: Record<number, 'best' | 'good' | 'mistake' | 'blunder'>;
 }
 
-const MoveList: React.FC<MoveListProps> = ({ moves }) => {
+const MoveList: React.FC<MoveListProps> = ({ moves, moveQualities = {} }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -20,7 +21,9 @@ const MoveList: React.FC<MoveListProps> = ({ moves }) => {
     movePairs.push({
       index: Math.floor(i / 2) + 1,
       white: moves[i],
+      whiteIdx: i,
       black: moves[i + 1] || '',
+      blackIdx: i + 1,
     });
   }
 
@@ -41,6 +44,26 @@ const MoveList: React.FC<MoveListProps> = ({ moves }) => {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const renderMoveCell = (move: string, idx: number) => {
+    if (!move) return null;
+    const quality = moveQualities[idx];
+    
+    return (
+        <div className="flex items-center space-x-1.5 relative group/cell">
+            <span>{move}</span>
+            {quality === 'best' && (
+                <Star className="w-3 h-3 text-yellow-400 fill-yellow-400 animate-pulse" />
+            )}
+            {quality === 'blunder' && (
+                <AlertTriangle className="w-3.5 h-3.5 text-red-500 fill-red-500/20" />
+            )}
+            {quality === 'mistake' && (
+                <AlertCircle className="w-3 h-3 text-orange-400" />
+            )}
+        </div>
+    );
   };
 
   return (
@@ -83,8 +106,12 @@ const MoveList: React.FC<MoveListProps> = ({ moves }) => {
               movePairs.map((pair) => (
                 <tr key={pair.index} className="border-b border-slate-700/50 hover:bg-slate-700/50 transition-colors">
                   <td className="px-4 py-2 text-slate-500 font-mono">{pair.index}.</td>
-                  <td className="px-4 py-2 text-slate-200 font-medium">{pair.white}</td>
-                  <td className="px-4 py-2 text-slate-200 font-medium">{pair.black}</td>
+                  <td className="px-4 py-2 text-slate-200 font-medium">
+                      {renderMoveCell(pair.white, pair.whiteIdx)}
+                  </td>
+                  <td className="px-4 py-2 text-slate-200 font-medium">
+                      {renderMoveCell(pair.black, pair.blackIdx)}
+                  </td>
                 </tr>
               ))
             )}

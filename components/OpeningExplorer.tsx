@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Chess } from 'chess.js';
 import ChessBoard from './ChessBoard';
-import { BookOpen, Undo2, RotateCcw, Monitor, Plus, Minus } from 'lucide-react';
+import { BookOpen, Undo2, RotateCcw, Monitor, Plus, Minus, Volume2 } from 'lucide-react';
 import { getOpeningStats } from '../services/openingService';
+import { speakOpeningInfo } from '../services/geminiService';
 import { OpeningStats } from '../types';
 
 const OpeningExplorer: React.FC = () => {
@@ -27,6 +28,12 @@ const OpeningExplorer: React.FC = () => {
     const data = await getOpeningStats(fen);
     setStats(data);
     setLoading(false);
+  };
+
+  const handleSpeakOpening = () => {
+      if (stats) {
+          speakOpeningInfo(stats, fen);
+      }
   };
 
   const onMove = (from: string, to: string) => {
@@ -122,16 +129,27 @@ const OpeningExplorer: React.FC = () => {
       <div className="lg:col-span-4 xl:col-span-3 flex flex-col h-[calc(100vh-140px)] bg-slate-800 rounded-xl border border-slate-700 overflow-hidden lg:sticky lg:top-6">
         
         {/* Header: Opening Name */}
-        <div className="p-5 border-b border-slate-700 bg-slate-900/50">
-           <h2 className="text-xs text-slate-400 uppercase tracking-widest font-bold mb-1">Current Position</h2>
-           {stats?.opening ? (
-             <div>
-               <div className="text-2xl font-bold text-white mb-1">{stats.opening.eco}</div>
-               <div className="text-lg text-blue-300">{stats.opening.name}</div>
-             </div>
-           ) : (
-             <div className="text-lg text-slate-500 italic">Uncommon or Custom Position</div>
-           )}
+        <div className="p-5 border-b border-slate-700 bg-slate-900/50 flex justify-between items-start">
+           <div>
+             <h2 className="text-xs text-slate-400 uppercase tracking-widest font-bold mb-1">Current Position</h2>
+             {stats?.opening ? (
+               <div>
+                 <div className="text-2xl font-bold text-white mb-1">{stats.opening.eco}</div>
+                 <div className="text-lg text-blue-300 leading-tight">{stats.opening.name}</div>
+               </div>
+             ) : (
+               <div className="text-lg text-slate-500 italic">Uncommon or Custom Position</div>
+             )}
+           </div>
+           
+           <button 
+             onClick={handleSpeakOpening}
+             disabled={loading || !stats}
+             className="p-2 bg-slate-800 hover:bg-slate-700 rounded-full text-blue-400 hover:text-white transition-colors border border-slate-700 shadow-md disabled:opacity-30"
+             title="Hear Opening Info"
+           >
+              <Volume2 className="w-5 h-5" />
+           </button>
         </div>
 
         {/* Stats List */}

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Chess } from 'chess.js';
 import ChessBoard from './ChessBoard';
-import { BookOpen, Undo2, RotateCcw, Monitor, Plus, Minus, Upload, Image as ImageIcon, X, Paperclip, Loader2, ArrowUp, Cpu, Sparkles, BrainCircuit, Copy, Check } from 'lucide-react';
+import { BookOpen, Undo2, RotateCcw, Monitor, Plus, Minus, Upload, Image as ImageIcon, X, Paperclip, Loader2, ArrowUp, Cpu, Sparkles, BrainCircuit, Copy, Check, Volume2 } from 'lucide-react';
 import { getBestMove } from '../services/engineService';
-import { parseGameInput, getDeepAnalysis } from '../services/geminiService';
+import { parseGameInput, getDeepAnalysis, speakDeepAnalysis } from '../services/geminiService';
 import { EngineResponse, EngineLine } from '../types';
 import ReactMarkdown from 'react-markdown';
 
@@ -58,6 +58,8 @@ const GameStudy: React.FC = () => {
       try {
           const analysis = await getDeepAnalysis(fen, history);
           setGeminiAnalysis(analysis);
+          // Auto speak summary of the deep analysis
+          speakDeepAnalysis(analysis);
       } catch (e) {
           console.error("Gemini 3 failed", e);
       } finally {
@@ -312,6 +314,14 @@ const GameStudy: React.FC = () => {
                     <span className="font-bold text-sm">Grandmaster Insight</span>
                 </div>
                 <div className="flex items-center space-x-1">
+                     <button 
+                        onClick={() => geminiAnalysis && speakDeepAnalysis(geminiAnalysis)}
+                        disabled={!geminiAnalysis}
+                        className="p-1 hover:bg-purple-500/20 rounded-full text-purple-400 hover:text-purple-200 transition-colors disabled:opacity-30"
+                        title="Read Analysis"
+                    >
+                        <Volume2 className="w-4 h-4" />
+                    </button>
                     <span className="text-[10px] uppercase font-bold text-purple-500 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">Gemini 3 Pro</span>
                 </div>
             </div>

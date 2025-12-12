@@ -7,6 +7,7 @@ import AICoach from './AICoach';
 import { RotateCcw, AlertTriangle, ChevronFirst, ChevronLeft, ChevronRight, ChevronLast, ZoomIn, ZoomOut, Monitor, Plus, Minus, User, Bot } from 'lucide-react';
 import { Arrow, PlayerColor } from '../types';
 import { getBestMove } from '../services/engineService';
+import { playMoveFeedback } from '../services/geminiService';
 
 // Sound utility
 const playMoveSound = (isCapture: boolean = false, isCheck: boolean = false) => {
@@ -70,6 +71,9 @@ const GameMode: React.FC = () => {
   const [statusMessage, setStatusMessage] = useState("Select Side to Start");
   const [arrows, setArrows] = useState<Arrow[]>([]);
   
+  // Move Quality Analysis (Index -> Quality)
+  const [moveQualities, setMoveQualities] = useState<Record<number, 'best' | 'good' | 'mistake' | 'blunder'>>({});
+
   // Player vs AI State
   const [playerColor, setPlayerColor] = useState<PlayerColor>('w');
   const [isAiThinking, setIsAiThinking] = useState(false);
@@ -124,7 +128,9 @@ const GameMode: React.FC = () => {
        if (gameForDisplay.get(source as any)?.color !== playerColor) return false;
     }
 
-    const tempGame = new Chess(gameForDisplay.fen());
+    const fenBeforeMove = gameForDisplay.fen();
+    const tempGame = new Chess(fenBeforeMove);
+    
     try {
       const move = tempGame.move({
         from: source,
@@ -138,14 +144,86 @@ const GameMode: React.FC = () => {
         playMoveSound(isCapture, isCheck);
 
         const newHistory = moveHistory.slice(0, currentMoveIndex + 1);
+        const newMoveIndex = newHistory.length;
         newHistory.push(move.san);
         setMoveHistory(newHistory);
+        
+        // If it was the player's move, check if it was a good move in the background
+        if (!isAiMove) {
+            checkPlayerMoveQuality(fenBeforeMove, source, target, newMoveIndex, move.san);
+        }
+
         return true;
       }
     } catch (e) {
       return false;
     }
     return false;
+  };
+
+  // Function to quickly check if the player made the "best" move or a blunder
+  const checkPlayerMoveQuality = async (fen: string, from: string, to: string, moveIndex: number, moveSan: string) => {
+      try {
+          // Request top 15 lines to identify where the user's move ranks
+          const response = await getBestMove(fen, 10, 15);
+          const topLines = response.top_lines || [];
+          const bestMove = response.best_move;
+          
+          if (!topLines.length) return;
+
+          const bestEval = topLines[0].evaluation.value;
+          const bestEvalType = topLines[0].evaluation.type;
+          
+          const userMoveUci = from + to;
+          
+          // Find user's move in the lines
+          const userLine = topLines.find(l => l.move.startsWith(userMoveUci));
+          
+          let quality: 'best' | 'good' | 'mistake' | 'blunder' = 'good';
+
+          if (userLine) {
+              if (userLine.move === bestMove || userLine.id === 1) {
+                  quality = 'best';
+              } else {
+                  // Compare scores
+                  const userEval = userLine.evaluation.value;
+                  const userEvalType = userLine.evaluation.type;
+                  
+                  // Simple diff logic (works for CP, rudimentary for mate)
+                  if (bestEvalType === 'mate' && userEvalType !== 'mate') {
+                      quality = 'blunder'; // Missed mate
+                  } else if (bestEvalType === userEvalType) {
+                       // Normalize diff based on turn. 
+                       // Engine score is usually white-relative or side-to-move relative depending on implementation.
+                       // services/engineService uses side-to-move typically for UCI, but let's assume raw diff for now.
+                       // Absolute difference is safest for general quality check.
+                       const diff = Math.abs(bestEval - userEval);
+                       
+                       if (diff > 200) quality = 'blunder'; // > 2 pawns
+                       else if (diff > 80) quality = 'mistake'; // > 0.8 pawns
+                       else quality = 'good';
+                  }
+              }
+          } else {
+              // User move not in top 15 lines -> Likely a blunder
+              quality = 'blunder';
+          }
+
+          if (quality !== 'good') {
+              setMoveQualities(prev => ({
+                  ...prev,
+                  [moveIndex]: quality
+              }));
+
+              // Call Gemini Voice for major events (Best or Blunder)
+              if (quality === 'best' || quality === 'blunder') {
+                  playMoveFeedback(fen, moveSan, quality);
+              }
+          }
+      } catch (e) {
+          // Silent fail on background analysis
+          console.debug("Quick analysis failed", e);
+      }
   };
 
   // AI Logic
@@ -208,6 +286,7 @@ const GameMode: React.FC = () => {
     chessRef.current = new Chess();
     setStartFen(DEFAULT_FEN);
     setMoveHistory([]);
+    setMoveQualities({});
     setCurrentMoveIndex(-1);
     setIsGameOver(false);
     setStatusMessage("Game Started");
@@ -301,7 +380,7 @@ const GameMode: React.FC = () => {
       {/* Right Column: History & AI */}
       <div className="lg:col-span-4 xl:col-span-3 flex flex-col space-y-4 h-[calc(100vh-140px)] lg:sticky lg:top-6">
         <div className="flex-1 min-h-[200px]">
-           <MoveList moves={moveHistory} />
+           <MoveList moves={moveHistory} moveQualities={moveQualities} />
         </div>
 
         <div className="flex items-center justify-center space-x-2 bg-slate-800 p-2 rounded-xl border border-slate-700 shadow-md shrink-0">

@@ -33,15 +33,18 @@ const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
 const ChessBoard: React.FC<ChessBoardProps> = ({ game, onMove, orientation = 'w', arrows = [] }) => {
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const [possibleMoves, setPossibleMoves] = useState<string[]>([]);
-  const [lastMove, setLastMove] = useState<{from: string, to: string} | null>(null);
   
   const board = game.board(); 
   const inCheck = game.inCheck();
   const turn = game.turn();
 
+  // Determine last move directly from game history to support both human and AI moves
+  const historyVerbose = game.history({ verbose: true });
+  const lastMove = historyVerbose.length > 0 ? historyVerbose[historyVerbose.length - 1] : null;
+
   useEffect(() => {
+    // Clear selection if game is reset
     if (game.history().length === 0) {
-      setLastMove(null);
       setSelectedSquare(null);
       setPossibleMoves([]);
     }
@@ -62,7 +65,8 @@ const ChessBoard: React.FC<ChessBoardProps> = ({ game, onMove, orientation = 'w'
 
       const success = onMove(selectedSquare, square);
       if (success) {
-        setLastMove({ from: selectedSquare, to: square });
+        // Move successful, selection clears. 
+        // Last move highlighting is handled by the re-render with updated game prop.
         setSelectedSquare(null);
         setPossibleMoves([]);
       } else {
