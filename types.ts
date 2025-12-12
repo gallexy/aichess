@@ -1,5 +1,15 @@
 export type PlayerColor = 'w' | 'b';
 
+export type Language = 'en' | 'zh';
+
+export type AiStyle = 'balanced' | 'aggressive';
+
+export interface GameSettings {
+  language: Language;
+  timeControl: number; // in seconds
+  aiStyle: AiStyle;
+}
+
 export interface GameState {
   fen: string;
   turn: PlayerColor;

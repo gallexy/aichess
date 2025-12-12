@@ -40,12 +40,51 @@ async function decodeAudioData(
   return buffer;
 }
 
+// --- Native TTS Fallback ---
+const speakNative = (text: string) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    
+    // Cancel any ongoing speech to avoid overlap
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    
+    // Attempt to select a pleasant English voice
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice = voices.find(v => 
+        (v.name.includes("Google") && v.name.includes("English") && v.name.includes("US")) || 
+        v.name.includes("Samantha") || 
+        v.name.includes("Zira")
+    ) || voices.find(v => v.lang.startsWith('en')) || voices[0];
+
+    if (preferredVoice) utterance.voice = preferredVoice;
+    
+    utterance.rate = 1.1; // Slightly faster for coaching
+    utterance.pitch = 1.0;
+    
+    window.speechSynthesis.speak(utterance);
+};
+
+// Ensure voices are loaded (Chrome quirk)
+if (typeof window !== 'undefined' && window.speechSynthesis) {
+    window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.getVoices();
+    };
+}
+
 // --- Internal: Core TTS Helper ---
 // Raw function: Takes text -> Calls TTS Model -> Plays Audio
-// This expects CLEAN text (no markdown, no complex instructions).
+// Fallback to Native TTS if API fails (e.g. 429 Quota Exceeded)
 const synthesizeAndPlay = async (textToSpeak: string) => {
     const client = getClient();
-    if (!client || !textToSpeak) return;
+    
+    // If no client (no API key), go straight to native
+    if (!client) {
+        speakNative(textToSpeak);
+        return;
+    }
+
+    if (!textToSpeak) return;
 
     try {
         const response = await client.models.generateContent({
@@ -76,9 +115,13 @@ const synthesizeAndPlay = async (textToSpeak: string) => {
             source.buffer = audioBuffer;
             source.connect(outputAudioContext.destination);
             source.start();
+        } else {
+            // API returned but no audio? Fallback.
+            throw new Error("No audio content in response");
         }
     } catch (e) {
-        console.error("TTS Engine failed:", e);
+        console.warn("Gemini TTS Engine failed (likely quota/network), switching to native fallback.", e);
+        speakNative(textToSpeak);
     }
 };
 
@@ -90,7 +133,7 @@ const generateSpokenScript = async (systemInstruction: string, contextData: stri
 
     try {
         const response = await client.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-2.5-flash-lite",
             contents: [{ parts: [{ text: `
                 Context: ${contextData}
                 
@@ -102,6 +145,8 @@ const generateSpokenScript = async (systemInstruction: string, contextData: stri
         return response.text?.trim() || "";
     } catch (e) {
         console.error("Script generation failed:", e);
+        // If script generation fails, we can't really speak anything useful unless we fallback to raw context, 
+        // but usually we just return empty to avoid speaking nonsense.
         return "";
     }
 };
@@ -187,7 +232,7 @@ export const getChessAdvice = async (
 
   try {
     const response = await client.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-flash-lite',
       contents: prompt,
       config: {
         systemInstruction: "You are a concise chess coach.",
@@ -226,7 +271,7 @@ export const getDeepAnalysis = async (fen: string, history: string[]): Promise<s
   
     try {
       const response = await client.models.generateContent({
-        model: 'gemini-3-pro-preview', 
+        model: 'gemini-2.5-flash-lite', 
         contents: prompt,
         config: { temperature: 0.7 }
       });

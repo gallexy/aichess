@@ -5,7 +5,7 @@ import Timer from './Timer';
 import MoveList from './MoveList';
 import AICoach from './AICoach';
 import { RotateCcw, AlertTriangle, ChevronFirst, ChevronLeft, ChevronRight, ChevronLast, ZoomIn, ZoomOut, Monitor, Plus, Minus, User, Bot } from 'lucide-react';
-import { Arrow, PlayerColor } from '../types';
+import { Arrow, PlayerColor, GameSettings } from '../types';
 import { getBestMove } from '../services/engineService';
 import { playMoveFeedback } from '../services/geminiService';
 
@@ -56,7 +56,11 @@ const playMoveSound = (isCapture: boolean = false, isCheck: boolean = false) => 
 
 const DEFAULT_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-const GameMode: React.FC = () => {
+interface GameModeProps {
+  settings: GameSettings;
+}
+
+const GameMode: React.FC<GameModeProps> = ({ settings }) => {
   const chessRef = useRef(new Chess());
   
   const [startFen, setStartFen] = useState(DEFAULT_FEN);
@@ -68,7 +72,7 @@ const GameMode: React.FC = () => {
   const [fen, setFen] = useState(DEFAULT_FEN);
   const [turn, setTurn] = useState<PlayerColor>('w');
   const [isGameOver, setIsGameOver] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("Select Side to Start");
+  const [statusMessage, setStatusMessage] = useState("");
   const [arrows, setArrows] = useState<Arrow[]>([]);
   
   // Move Quality Analysis (Index -> Quality)
@@ -82,6 +86,43 @@ const GameMode: React.FC = () => {
   const [boardWidth, setBoardWidth] = useState(540);
   const handleZoomIn = () => setBoardWidth(prev => Math.min(prev + 50, 1200));
   const handleZoomOut = () => setBoardWidth(prev => Math.max(prev - 50, 300));
+
+  // --- Translation Helper ---
+  const t = (key: string) => {
+    const dict: any = {
+      en: {
+        playWhite: "Play White",
+        playBlack: "Play Black",
+        white: "White",
+        black: "Black",
+        thinking: "Opponent is thinking...",
+        selectSide: "Select Side to Start",
+        checkmate: "Checkmate! $WINNER wins!",
+        draw: "Game Draw!",
+        check: "Check!",
+        newGame: "New Game",
+        whiteTimeout: "White ran out of time! Black wins.",
+        blackTimeout: "Black ran out of time! White wins.",
+        gameStarted: "Game Started",
+      },
+      zh: {
+        playWhite: "执白棋",
+        playBlack: "执黑棋",
+        white: "白方",
+        black: "黑方",
+        thinking: "对手思考中...",
+        selectSide: "请选择执棋方",
+        checkmate: "将死！$WINNER 获胜！",
+        draw: "和棋！",
+        check: "将军！",
+        newGame: "新游戏",
+        whiteTimeout: "白方超时！黑方胜。",
+        blackTimeout: "黑方超时！白方胜。",
+        gameStarted: "游戏开始",
+      }
+    };
+    return dict[settings.language][key] || key;
+  };
 
   // --- Derived Game State ---
   const gameForDisplay = useMemo(() => {
@@ -102,16 +143,19 @@ const GameMode: React.FC = () => {
 
     if (gameForDisplay.isCheckmate()) {
       setIsGameOver(true);
-      setStatusMessage(`Checkmate! ${gameForDisplay.turn() === 'w' ? 'Black' : 'White'} wins!`);
+      const winner = gameForDisplay.turn() === 'w' ? (settings.language === 'en' ? 'Black' : '黑方') : (settings.language === 'en' ? 'White' : '白方');
+      setStatusMessage(t('checkmate').replace('$WINNER', winner));
     } else if (gameForDisplay.isDraw()) {
       setIsGameOver(true);
-      setStatusMessage("Game Draw!");
+      setStatusMessage(t('draw'));
     } else if (gameForDisplay.inCheck()) {
-      setStatusMessage("Check!");
+      setStatusMessage(t('check'));
+    } else if (moveHistory.length === 0) {
+      setStatusMessage(t('selectSide'));
     } else {
       setStatusMessage("");
     }
-  }, [gameForDisplay]);
+  }, [gameForDisplay, settings.language]);
 
   // Auto-scroll
   useEffect(() => {
@@ -122,7 +166,6 @@ const GameMode: React.FC = () => {
     if (isGameOver) return false;
     
     // Prevent player from moving AI pieces
-    // If it's not an AI move, checks if it's player's turn and player's piece
     if (!isAiMove) {
        if (turn !== playerColor) return false;
        if (gameForDisplay.get(source as any)?.color !== playerColor) return false;
@@ -161,11 +204,10 @@ const GameMode: React.FC = () => {
     return false;
   };
 
-  // Function to quickly check if the player made the "best" move or a blunder
   const checkPlayerMoveQuality = async (fen: string, from: string, to: string, moveIndex: number, moveSan: string) => {
       try {
-          // Request top 15 lines to identify where the user's move ranks
-          const response = await getBestMove(fen, 10, 15);
+          // Request top 10 lines
+          const response = await getBestMove(fen, 10, 10);
           const topLines = response.top_lines || [];
           const bestMove = response.best_move;
           
@@ -176,7 +218,6 @@ const GameMode: React.FC = () => {
           
           const userMoveUci = from + to;
           
-          // Find user's move in the lines
           const userLine = topLines.find(l => l.move.startsWith(userMoveUci));
           
           let quality: 'best' | 'good' | 'mistake' | 'blunder' = 'good';
@@ -185,43 +226,29 @@ const GameMode: React.FC = () => {
               if (userLine.move === bestMove || userLine.id === 1) {
                   quality = 'best';
               } else {
-                  // Compare scores
                   const userEval = userLine.evaluation.value;
                   const userEvalType = userLine.evaluation.type;
                   
-                  // Simple diff logic (works for CP, rudimentary for mate)
                   if (bestEvalType === 'mate' && userEvalType !== 'mate') {
-                      quality = 'blunder'; // Missed mate
+                      quality = 'blunder'; 
                   } else if (bestEvalType === userEvalType) {
-                       // Normalize diff based on turn. 
-                       // Engine score is usually white-relative or side-to-move relative depending on implementation.
-                       // services/engineService uses side-to-move typically for UCI, but let's assume raw diff for now.
-                       // Absolute difference is safest for general quality check.
                        const diff = Math.abs(bestEval - userEval);
-                       
-                       if (diff > 200) quality = 'blunder'; // > 2 pawns
-                       else if (diff > 80) quality = 'mistake'; // > 0.8 pawns
+                       if (diff > 200) quality = 'blunder'; 
+                       else if (diff > 80) quality = 'mistake'; 
                        else quality = 'good';
                   }
               }
           } else {
-              // User move not in top 15 lines -> Likely a blunder
               quality = 'blunder';
           }
 
           if (quality !== 'good') {
-              setMoveQualities(prev => ({
-                  ...prev,
-                  [moveIndex]: quality
-              }));
-
-              // Call Gemini Voice for major events (Best or Blunder)
+              setMoveQualities(prev => ({ ...prev, [moveIndex]: quality }));
               if (quality === 'best' || quality === 'blunder') {
                   playMoveFeedback(fen, moveSan, quality);
               }
           }
       } catch (e) {
-          // Silent fail on background analysis
           console.debug("Quick analysis failed", e);
       }
   };
@@ -230,39 +257,49 @@ const GameMode: React.FC = () => {
   useEffect(() => {
     if (isGameOver || isAiThinking || turn === playerColor) return;
     
-    // It is AI's turn
     const makeAiMove = async () => {
         setIsAiThinking(true);
-        setStatusMessage("Opponent is thinking...");
+        setStatusMessage(t('thinking'));
         
         try {
-            // Request 5 lines (multipv=5) to find a balanced move
-            // Depth 10 for faster response
-            const response = await getBestMove(fen, 10, 5);
+            // "Aggressive": Picks top move (MultiPV=1)
+            // "Balanced": Picks MultiPV=5, sorts by closest to 0 or keeps game complex without ruthless mating
+            const multiPv = settings.aiStyle === 'aggressive' ? 1 : 5;
+            const depth = settings.aiStyle === 'aggressive' ? 12 : 10;
+            
+            const response = await getBestMove(fen, depth, multiPv);
             
             if (response.top_lines && response.top_lines.length > 0) {
-                // Strategy: Find the move with evaluation closest to 0 (balanced)
-                // sort by absolute value of evaluation
-                const sortedLines = [...response.top_lines].sort((a, b) => {
-                    // Treat mate scores as high numbers (e.g. 10000)
-                    const valA = a.evaluation.type === 'mate' ? 10000 : Math.abs(a.evaluation.value);
-                    const valB = b.evaluation.type === 'mate' ? 10000 : Math.abs(b.evaluation.value);
-                    return valA - valB;
-                });
+                let chosenMove = response.best_move;
+
+                if (settings.aiStyle === 'balanced' && response.top_lines.length > 1) {
+                     // Sort by "gentleness" - closer to 0 or keeping options open, avoiding rapid mate unless necessary
+                     // For simplicity: balanced mode picks the move that isn't the absolute best but is still decent (e.g., 2nd or 3rd best)
+                     // Or sorts by absolute value to find 0.
+                     const lines = [...response.top_lines];
+                     
+                     // If we are crushing the player (> 300 CP), give them a chance by picking the 2nd or 3rd best move if available
+                     // But don't pick a move that loses (< -100).
+                     if (response.evaluation.value > 300 && response.evaluation.type === 'cp') {
+                         const validSuboptimal = lines.filter(l => l.evaluation.type === 'cp' && l.evaluation.value > -50);
+                         if (validSuboptimal.length > 1) {
+                             chosenMove = validSuboptimal[1].move; // Pick 2nd best
+                         }
+                     }
+                     // Otherwise default to best move if game is close
+                } else {
+                    // Aggressive: Always best move
+                    chosenMove = response.best_move;
+                }
                 
-                // Pick the most balanced move (index 0 after sort)
-                const balancedMove = sortedLines[0].move;
+                const from = chosenMove.substring(0, 2);
+                const to = chosenMove.substring(2, 4);
                 
-                const from = balancedMove.substring(0, 2);
-                const to = balancedMove.substring(2, 4);
-                
-                // Add small delay for realism
                 setTimeout(() => {
-                   onMove(from, to, true); // Pass true for isAiMove
+                   onMove(from, to, true);
                    setIsAiThinking(false);
                 }, 800);
             } else {
-                 // Fallback if no lines (should be rare)
                  setIsAiThinking(false);
             }
         } catch (e) {
@@ -273,13 +310,13 @@ const GameMode: React.FC = () => {
 
     makeAiMove();
 
-  }, [turn, playerColor, isGameOver, fen]);
+  }, [turn, playerColor, isGameOver, fen, settings.aiStyle]);
 
 
   const handleTimeout = useCallback(() => {
     setIsGameOver(true);
-    setStatusMessage(turn === 'w' ? "White ran out of time! Black wins." : "Black ran out of time! White wins.");
-  }, [turn]);
+    setStatusMessage(turn === 'w' ? t('whiteTimeout') : t('blackTimeout'));
+  }, [turn, settings.language]);
 
   const resetGame = (color: PlayerColor) => {
     setPlayerColor(color);
@@ -289,12 +326,12 @@ const GameMode: React.FC = () => {
     setMoveQualities({});
     setCurrentMoveIndex(-1);
     setIsGameOver(false);
-    setStatusMessage("Game Started");
+    setStatusMessage(t('gameStarted'));
     setArrows([]);
     setGameId(prev => prev + 1);
   };
 
-  // --- Navigation Controls ---
+  // Navigation
   const goToFirst = () => setCurrentMoveIndex(-1);
   const goToPrev = () => setCurrentMoveIndex(prev => Math.max(-1, prev - 1));
   const goToNext = () => setCurrentMoveIndex(prev => Math.min(moveHistory.length - 1, prev + 1));
@@ -312,7 +349,7 @@ const GameMode: React.FC = () => {
             <button onClick={handleZoomIn} className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors border border-slate-700 shadow-sm"><Plus className="w-4 h-4" /></button>
         </div>
 
-        {/* Status Bar & Controls (New Layout) */}
+        {/* Status Bar & Controls */}
         <div className="w-full max-w-2xl bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl p-3 flex flex-row justify-between items-start gap-2 shadow-lg relative overflow-hidden">
            
            {/* Left: Black Controls */}
@@ -322,10 +359,10 @@ const GameMode: React.FC = () => {
                 className={`flex items-center justify-center space-x-1.5 px-3 py-1.5 rounded-lg transition-all border shadow-sm text-[10px] font-bold uppercase tracking-wider w-full ${playerColor === 'b' ? 'bg-slate-600 border-slate-500 text-white ring-2 ring-slate-500/50' : 'bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600'}`}
               >
                 <Bot className="w-3 h-3" />
-                <span>Play Black</span>
+                <span>{t('playBlack')}</span>
              </button>
-             {/* Timer set to 900s (15 mins) */}
-             <Timer key={`timer-b-${gameId}`} label="Black" initialTimeSeconds={900} isActive={!isGameOver && turn === 'b'} onTimeout={handleTimeout} variant="dark" />
+             {/* Key ensures timer resets when settings change */}
+             <Timer key={`timer-b-${gameId}-${settings.timeControl}`} label={t('black')} initialTimeSeconds={settings.timeControl} isActive={!isGameOver && turn === 'b'} onTimeout={handleTimeout} variant="dark" />
            </div>
 
            {/* Center: Status & New Game */}
@@ -339,7 +376,7 @@ const GameMode: React.FC = () => {
                   className="flex items-center space-x-1.5 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-1.5 rounded-lg transition-all border border-indigo-400 shadow-lg hover:shadow-indigo-500/30 text-[10px] font-bold uppercase tracking-wider"
                >
                   <RotateCcw className="w-3 h-3" />
-                  <span>New Game</span>
+                  <span>{t('newGame')}</span>
                </button>
            </div>
 
@@ -350,10 +387,9 @@ const GameMode: React.FC = () => {
                 className={`flex items-center justify-center space-x-1.5 px-3 py-1.5 rounded-lg transition-all border shadow-sm text-[10px] font-bold uppercase tracking-wider w-full ${playerColor === 'w' ? 'bg-emerald-700 border-emerald-500 text-white ring-2 ring-emerald-500/50' : 'bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600'}`}
               >
                 <User className="w-3 h-3" />
-                <span>Play White</span>
+                <span>{t('playWhite')}</span>
              </button>
-             {/* Timer set to 900s (15 mins) */}
-             <Timer key={`timer-w-${gameId}`} label="White" initialTimeSeconds={900} isActive={!isGameOver && turn === 'w'} onTimeout={handleTimeout} variant="light" />
+             <Timer key={`timer-w-${gameId}-${settings.timeControl}`} label={t('white')} initialTimeSeconds={settings.timeControl} isActive={!isGameOver && turn === 'w'} onTimeout={handleTimeout} variant="light" />
            </div>
 
            {/* Progress Bars */}
