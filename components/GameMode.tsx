@@ -257,6 +257,8 @@ const GameMode: React.FC<GameModeProps> = ({ settings }) => {
   useEffect(() => {
     if (isGameOver || isAiThinking || turn === playerColor) return;
     
+    let isCancelled = false;
+
     const makeAiMove = async () => {
         setIsAiThinking(true);
         setStatusMessage(t('thinking'));
@@ -269,6 +271,8 @@ const GameMode: React.FC<GameModeProps> = ({ settings }) => {
             
             const response = await getBestMove(fen, depth, multiPv);
             
+            if (isCancelled) return;
+
             if (response.top_lines && response.top_lines.length > 0) {
                 let chosenMove = response.best_move;
 
@@ -296,19 +300,27 @@ const GameMode: React.FC<GameModeProps> = ({ settings }) => {
                 const to = chosenMove.substring(2, 4);
                 
                 setTimeout(() => {
-                   onMove(from, to, true);
-                   setIsAiThinking(false);
-                }, 800);
+                   if (!isCancelled) {
+                       onMove(from, to, true);
+                       setIsAiThinking(false);
+                   }
+                }, 10000); // 10 second delay as requested
             } else {
-                 setIsAiThinking(false);
+                 if (!isCancelled) setIsAiThinking(false);
             }
         } catch (e) {
-            console.error("AI Move failed", e);
-            setIsAiThinking(false);
+            if (!isCancelled) {
+                console.error("AI Move failed", e);
+                setIsAiThinking(false);
+            }
         }
     };
 
     makeAiMove();
+
+    return () => {
+        isCancelled = true;
+    };
 
   }, [turn, playerColor, isGameOver, fen, settings.aiStyle]);
 
@@ -326,6 +338,7 @@ const GameMode: React.FC<GameModeProps> = ({ settings }) => {
     setMoveQualities({});
     setCurrentMoveIndex(-1);
     setIsGameOver(false);
+    setIsAiThinking(false); // Reset AI thinking state
     setStatusMessage(t('gameStarted'));
     setArrows([]);
     setGameId(prev => prev + 1);

@@ -161,8 +161,8 @@ export const playMoveFeedback = async (
 ) => {
   // Generate script
   const script = await generateSpokenScript(
-      "You are an energetic chess coach. Give a 1-sentence reaction to the player's move quality.",
-      `Move: ${moveSan}, Quality: ${quality}`
+      "You are a sharp chess commentator. Give a 1-sentence reaction to the move. If it's a mistake, explicitly say what is lost (e.g. 'That blunders the knight'). If it's good, explain the benefit (e.g. 'Strong control of the center'). Avoid generic praise.",
+      `Move: ${moveSan}, Quality: ${quality}, Position FEN: ${fen}`
   );
   // Speak script
   await synthesizeAndPlay(script);
@@ -171,7 +171,7 @@ export const playMoveFeedback = async (
 export const speakAdvice = async (adviceText: string) => {
     // Summarize the markdown advice into a verbal summary
     const script = await generateSpokenScript(
-        "You are a Grandmaster coach. Summarize this analysis into 2 short, precise sentences. Focus on the most critical 'why'. Be direct.",
+        "You are a Grandmaster coach. Summarize this analysis into 2 sentences. Focus on the *consequences* and the *key threat*. Explain 'Why' it matters.",
         adviceText
     );
     await synthesizeAndPlay(script);
@@ -201,6 +201,14 @@ export const speakOpeningInfo = async (stats: OpeningStats, fen: string) => {
     await synthesizeAndPlay(script);
 };
 
+export const speakExplanation = async (fen: string, moveSan: string) => {
+    const script = await generateSpokenScript(
+        "You are a Grandmaster instructor. Explain in 1 short sentence why this computer-recommended move is strong. Focus on the immediate benefit (e.g. 'This forks the rook and king' or 'It secures the center').",
+        `Move: ${moveSan}, Position FEN: ${fen}`
+    );
+    await synthesizeAndPlay(script);
+};
+
 
 // --- Main Analysis Function (Quick Advice for Play Mode) ---
 export const getChessAdvice = async (
@@ -215,19 +223,32 @@ export const getChessAdvice = async (
 
   // Refined prompt for conciseness and key points
   const prompt = `
-    You are a friendly Grandmaster tutor.
+    You are a world-class Chess Coach (like Jeremy Silman). The user wants deep insight into the position's consequences.
     
-    Position: ${fen}
-    Turn: ${turn === 'w' ? 'White' : 'Black'}
-    Best Move (Engine): ${bestMove || 'Unknown'}
-    Eval: ${evaluation || 'Unknown'}
+    Current Position (FEN): ${fen}
+    Side to move: ${turn === 'w' ? 'White' : 'Black'}
+    Best Move according to Engine: ${bestMove || 'Not calculated'}
+    Engine Evaluation: ${evaluation || 'Not calculated'}
+    Game History: ${history.slice(-6).join(' ')}
 
-    Provide a concise analysis (max 3 short bullet points):
-    1. **Critical Insight**: One sentence on the main threat or opportunity.
-    2. **The Plan**: What should the player aim for? (e.g. "Attack the f7 square").
-    3. **Best Move**: State the move and specifically *why* it works in 5 words or less.
+    Analyze this position focusing strictly on **Causal Impact** and **Future Plans**.
+    
+    Please provide your response in this structured Markdown format:
 
-    Keep it punchy. No long paragraphs.
+    1. **The Critical Implication**: 
+       - Explain exactly how the current board structure dictates the game. 
+       - *Example:* "The backward d-pawn is a long-term weakness that Black can target." or "White has a space advantage on the kingside allowing for an attack."
+       
+    2. **Immediate Tactical Landscape**:
+       - What specific threats exist right now? 
+       - *Example:* "If White moves the knight, the f2 pawn hangs."
+
+    3. **The Recommended Plan**:
+       - Why is the best move the best? What future does it create?
+       - *Example:* "Moving the Rook to e1 controls the open file and prepares to support the e4 push."
+
+    **Do NOT** use phrases like "This is a good position" without explaining WHY. 
+    **Do NOT** be vague. Be specific about squares (e.g. f7, d4) and pieces.
   `;
 
   try {
@@ -235,7 +256,7 @@ export const getChessAdvice = async (
       model: 'gemini-2.5-flash-lite',
       contents: prompt,
       config: {
-        systemInstruction: "You are a concise chess coach.",
+        systemInstruction: "You are a deep strategic chess thinker. You hate generic advice. You focus on board mechanics and future plans.",
       }
     });
 
@@ -256,17 +277,17 @@ export const getDeepAnalysis = async (fen: string, history: string[]): Promise<s
       
       Provide a structured report in Markdown:
       
-      ### ♟️ Structure
-      Key pawn structures/weaknesses.
+      ### ♟️ Structure & Imbalances
+      Analyze pawn structures, weak squares, and space. Who controls the center?
 
-      ### ⚔️ Strategy
-      Plans for both sides.
+      ### ⚔️ Strategic Plans
+      What should White aim for? What should Black aim for? (e.g. Minority attack, Kingside storm).
 
-      ### 💡 Tactics
-      Any immediate tactical themes.
+      ### 💡 Key Tactics & Threats
+      Any immediate tactical themes or traps to avoid.
       
-      ### 🎓 Verdict
-      Final evaluation.
+      ### 🎓 Grandmaster Verdict
+      Final evaluation of the position's dynamic potential.
     `;
   
     try {

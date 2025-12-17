@@ -3,7 +3,7 @@ import { Chess } from 'chess.js';
 import ChessBoard from './ChessBoard';
 import { BookOpen, Undo2, RotateCcw, Monitor, Plus, Minus, Upload, Image as ImageIcon, X, Paperclip, Loader2, ArrowUp, Cpu, Sparkles, BrainCircuit, Copy, Check, Volume2 } from 'lucide-react';
 import { getBestMove } from '../services/engineService';
-import { parseGameInput, getDeepAnalysis, speakDeepAnalysis } from '../services/geminiService';
+import { parseGameInput, getDeepAnalysis, speakDeepAnalysis, speakExplanation } from '../services/geminiService';
 import { EngineResponse, EngineLine } from '../types';
 import ReactMarkdown from 'react-markdown';
 
@@ -80,10 +80,23 @@ const GameStudy: React.FC = () => {
   };
 
   const handleManualMove = (uci: string) => {
-    // Convert UCI (e2e4) to move
     const from = uci.substring(0, 2);
     const to = uci.substring(2, 4);
-    onMove(from, to);
+    
+    // Capture current FEN (before the move) to provide context for the explanation
+    const contextFen = fen;
+    
+    const success = onMove(from, to);
+    
+    if (success) {
+         // Get the SAN of the move just played from the synchronous chess instance
+         // This ensures we explain the move that actually happened (e.g. captures, checks)
+         const history = chessRef.current.history();
+         const lastMoveSan = history[history.length - 1];
+         if (lastMoveSan) {
+             speakExplanation(contextFen, lastMoveSan);
+         }
+    }
   };
 
   const undoMove = () => {
@@ -286,6 +299,7 @@ const GameStudy: React.FC = () => {
                     key={idx} 
                     onClick={() => handleManualMove(line.move)}
                     className="bg-slate-700/30 hover:bg-slate-700/60 border border-slate-600/50 rounded-lg p-2 cursor-pointer transition-colors group flex items-center justify-between"
+                    title="Click to play and explain move"
                     >
                     <div className="flex items-center space-x-2">
                         <span className={`w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-bold ${idx === 0 ? 'bg-emerald-900 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
