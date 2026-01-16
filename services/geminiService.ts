@@ -49,23 +49,21 @@ const speakNative = (text: string) => {
 
     const utterance = new SpeechSynthesisUtterance(text);
     
-    // Attempt to select a pleasant English voice
+    // Attempt to select a pleasant Chinese voice
     const voices = window.speechSynthesis.getVoices();
     const preferredVoice = voices.find(v => 
-        (v.name.includes("Google") && v.name.includes("English") && v.name.includes("US")) || 
-        v.name.includes("Samantha") || 
-        v.name.includes("Zira")
-    ) || voices.find(v => v.lang.startsWith('en')) || voices[0];
+        (v.name.includes("Chinese") || v.lang.includes("zh"))
+    ) || voices.find(v => v.lang.startsWith('zh')) || voices[0];
 
     if (preferredVoice) utterance.voice = preferredVoice;
     
-    utterance.rate = 1.1; // Slightly faster for coaching
+    utterance.rate = 1.0; 
     utterance.pitch = 1.0;
     
     window.speechSynthesis.speak(utterance);
 };
 
-// Ensure voices are loaded (Chrome quirk)
+// Ensure voices are loaded
 if (typeof window !== 'undefined' && window.speechSynthesis) {
     window.speechSynthesis.onvoiceschanged = () => {
         window.speechSynthesis.getVoices();
@@ -73,12 +71,9 @@ if (typeof window !== 'undefined' && window.speechSynthesis) {
 }
 
 // --- Internal: Core TTS Helper ---
-// Raw function: Takes text -> Calls TTS Model -> Plays Audio
-// Fallback to Native TTS if API fails (e.g. 429 Quota Exceeded)
 const synthesizeAndPlay = async (textToSpeak: string) => {
     const client = getClient();
     
-    // If no client (no API key), go straight to native
     if (!client) {
         speakNative(textToSpeak);
         return;
@@ -94,7 +89,7 @@ const synthesizeAndPlay = async (textToSpeak: string) => {
                 responseModalities: ['AUDIO'] as any, 
                 speechConfig: {
                     voiceConfig: {
-                        prebuiltVoiceConfig: { voiceName: 'Kore' }, // 'Puck' or 'Kore' are good for coaching
+                        prebuiltVoiceConfig: { voiceName: 'Kore' }, 
                     },
                 },
             },
@@ -116,17 +111,15 @@ const synthesizeAndPlay = async (textToSpeak: string) => {
             source.connect(outputAudioContext.destination);
             source.start();
         } else {
-            // API returned but no audio? Fallback.
             throw new Error("No audio content in response");
         }
     } catch (e) {
-        console.warn("Gemini TTS Engine failed (likely quota/network), switching to native fallback.", e);
+        console.warn("Gemini TTS Engine failed, switching to native fallback.", e);
         speakNative(textToSpeak);
     }
 };
 
 // --- Internal: Script Generator ---
-// Takes complex data -> Calls Flash Model -> Returns concise spoken script
 const generateSpokenScript = async (systemInstruction: string, contextData: string): Promise<string> => {
     const client = getClient();
     if (!client) return "";
@@ -135,18 +128,16 @@ const generateSpokenScript = async (systemInstruction: string, contextData: stri
         const response = await client.models.generateContent({
             model: "gemini-2.5-flash-lite",
             contents: [{ parts: [{ text: `
-                Context: ${contextData}
+                背景信息: ${contextData}
                 
-                Task: ${systemInstruction}
+                任务: ${systemInstruction}
                 
-                Constraint: Return ONLY the spoken text. No markdown. No emojis. Keep it under 2 sentences unless specified.
+                约束条件: 仅返回朗读文本。不要使用 Markdown 或表情符号。字数控制在2句话以内，必须使用中文回答。
             ` }] }]
         });
         return response.text?.trim() || "";
     } catch (e) {
         console.error("Script generation failed:", e);
-        // If script generation fails, we can't really speak anything useful unless we fallback to raw context, 
-        // but usually we just return empty to avoid speaking nonsense.
         return "";
     }
 };
@@ -159,43 +150,39 @@ export const playMoveFeedback = async (
   moveSan: string,
   quality: 'best' | 'good' | 'mistake' | 'blunder'
 ) => {
-  // Generate script
   const script = await generateSpokenScript(
-      "You are a sharp chess commentator. Give a 1-sentence reaction to the move. If it's a mistake, explicitly say what is lost (e.g. 'That blunders the knight'). If it's good, explain the benefit (e.g. 'Strong control of the center'). Avoid generic praise.",
-      `Move: ${moveSan}, Quality: ${quality}, Position FEN: ${fen}`
+      "你是一位敏锐的国际象棋解说员。请对这步棋做一个短促有力的评价（一句话）。如果是失误，明确指出丢了什么（例如：'这步棋丢了马'）。如果是妙着，解释好处（例如：'完美控制了中心'）。",
+      `棋步: ${moveSan}, 质量: ${quality}, 局面 FEN: ${fen}`
   );
-  // Speak script
   await synthesizeAndPlay(script);
 };
 
 export const speakAdvice = async (adviceText: string) => {
-    // Summarize the markdown advice into a verbal summary
     const script = await generateSpokenScript(
-        "You are a Grandmaster coach. Summarize this analysis into 2 sentences. Focus on the *consequences* and the *key threat*. Explain 'Why' it matters.",
+        "你是一位大师级教练。请用两句话总结这段分析。重点说明这步棋的后果和主要威胁。解释‘为什么’这很重要。",
         adviceText
     );
     await synthesizeAndPlay(script);
 };
 
 export const speakDeepAnalysis = async (analysisText: string) => {
-    // Deep analysis is long, so we need a slightly longer summary
     const script = await generateSpokenScript(
-        "You are a Grandmaster. Give a 3-sentence executive summary of this deep analysis. Mention the key pawn structure feature and the main plan for the player.",
+        "你是一位特级大师。请对这段深度分析做一个3句话左右的中文摘要。提到关键的兵形结构特征和接下来的主要计划。",
         analysisText
     );
     await synthesizeAndPlay(script);
 };
 
 export const speakOpeningInfo = async (stats: OpeningStats, fen: string) => {
-    const openingName = stats.opening ? `${stats.opening.eco} - ${stats.opening.name}` : "Unknown position";
+    const openingName = stats.opening ? `${stats.opening.eco} - ${stats.opening.name}` : "未知开局";
     const context = `
-        Opening: ${openingName}
-        Stats: White wins ${stats.white} games, Black wins ${stats.black}, Draws ${stats.draws}.
-        Top moves: ${stats.moves.slice(0,3).map(m => m.san).join(', ')}.
+        开局: ${openingName}
+        统计数据: 白胜 ${stats.white} 局, 黑胜 ${stats.black}, 和棋 ${stats.draws}。
+        热门棋步: ${stats.moves.slice(0,3).map(m => m.san).join(', ')}。
     `;
     
     const script = await generateSpokenScript(
-        "You are a chess historian. Introduce this opening briefly. Mention if it favors White or Black based on the stats, and name the most popular continuation move.",
+        "你是一位国际象棋历史学家。请简要介绍这个开局。根据统计数据说明它对哪一方有利，并提及最常见的后续走法。",
         context
     );
     await synthesizeAndPlay(script);
@@ -203,8 +190,8 @@ export const speakOpeningInfo = async (stats: OpeningStats, fen: string) => {
 
 export const speakExplanation = async (fen: string, moveSan: string) => {
     const script = await generateSpokenScript(
-        "You are a Grandmaster instructor. Explain in 1 short sentence why this computer-recommended move is strong. Focus on the immediate benefit (e.g. 'This forks the rook and king' or 'It secures the center').",
-        `Move: ${moveSan}, Position FEN: ${fen}`
+        "你是一位特级大师教练。请用一句简短的中文解释为什么这个电脑推荐的棋步很强。专注于直接的收益（例如：'这形成了一个对王和车的双击'或'它巩固了中心'）。",
+        `棋步: ${moveSan}, 局面 FEN: ${fen}`
     );
     await synthesizeAndPlay(script);
 };
@@ -219,36 +206,36 @@ export const getChessAdvice = async (
   evaluation?: string
 ): Promise<string> => {
   const client = getClient();
-  if (!client) return "API Key unavailable. Cannot consult the AI Coach.";
+  if (!client) return "API 密钥不可用。无法咨询 AI 教练。";
 
-  // Refined prompt for conciseness and key points
   const prompt = `
-    You are a world-class Chess Coach (like Jeremy Silman). The user wants deep insight into the position's consequences.
+    你是一位世界级的国际象棋教练（如 Jeremy Silman）。用户希望深入了解当前局面的后果。
     
-    Current Position (FEN): ${fen}
-    Side to move: ${turn === 'w' ? 'White' : 'Black'}
-    Best Move according to Engine: ${bestMove || 'Not calculated'}
-    Engine Evaluation: ${evaluation || 'Not calculated'}
-    Game History: ${history.slice(-6).join(' ')}
+    当前局面 (FEN): ${fen}
+    轮到谁走: ${turn === 'w' ? '白方' : '黑方'}
+    引擎推荐走法: ${bestMove || '未计算'}
+    引擎评估: ${evaluation || '未计算'}
+    对局历史: ${history.slice(-6).join(' ')}
 
-    Analyze this position focusing strictly on **Causal Impact** and **Future Plans**.
+    请针对此局面进行分析，严格关注 **因果影响** 和 **后续计划**。
     
-    Please provide your response in this structured Markdown format:
+    请按以下 Markdown 格式提供回复：
 
-    1. **The Critical Implication**: 
-       - Explain exactly how the current board structure dictates the game. 
-       - *Example:* "The backward d-pawn is a long-term weakness that Black can target." or "White has a space advantage on the kingside allowing for an attack."
+    1. **关键含义**: 
+       - 解释当前棋盘结构如何决定比赛方向。
+       - *示例:* "d5位的落后兵是黑方可以攻击的长期弱点。" 或 "白方在王翼拥有空间优势，允许发起进攻。"
        
-    2. **Immediate Tactical Landscape**:
-       - What specific threats exist right now? 
-       - *Example:* "If White moves the knight, the f2 pawn hangs."
+    2. **即时战术局势**:
+       - 现在存在哪些具体的威胁？
+       - *示例:* "如果白方移动这匹马，f2兵就会丢失。"
 
-    3. **The Recommended Plan**:
-       - Why is the best move the best? What future does it create?
-       - *Example:* "Moving the Rook to e1 controls the open file and prepares to support the e4 push."
+    3. **推荐计划**:
+       - 为什么推荐的走法是最好的？它创造了什么样的未来？
+       - *示例:* "将车移到 e1 可以控制开放线，并为支持 e4 冲兵做准备。"
 
-    **Do NOT** use phrases like "This is a good position" without explaining WHY. 
-    **Do NOT** be vague. Be specific about squares (e.g. f7, d4) and pieces.
+    **不要** 使用类似 "这是一个好局面" 这样空洞的话，必须解释原因。
+    **不要** 含糊其辞。具体指出坐标（如 f7, d4）和棋子。
+    **必须使用中文回答**。
   `;
 
   try {
@@ -256,38 +243,38 @@ export const getChessAdvice = async (
       model: 'gemini-2.5-flash-lite',
       contents: prompt,
       config: {
-        systemInstruction: "You are a deep strategic chess thinker. You hate generic advice. You focus on board mechanics and future plans.",
+        systemInstruction: "你是一位深邃的国际象棋战略思想家。你讨厌泛泛而谈。你专注于棋盘机制和未来计划。请始终使用中文回答。",
       }
     });
 
-    return response.text || "Thinking...";
+    return response.text || "正在思考...";
   } catch (error) {
     console.error("Error fetching chess advice:", error);
-    return "AI Coach unavailable.";
+    return "AI 教练暂时不可用。";
   }
 };
 
 // --- Deep Strategic Analysis (Gemini 3 Pro) ---
 export const getDeepAnalysis = async (fen: string, history: string[]): Promise<string> => {
     const client = getClient();
-    if (!client) return "API Key unavailable.";
+    if (!client) return "API 密钥不可用。";
   
     const prompt = `
-      You are a renowned Chess Grandmaster. Analyze this position (FEN: ${fen}).
+      你是一位著名的国际象棋特级大师。请分析此局面 (FEN: ${fen})。
       
-      Provide a structured report in Markdown:
+      请以中文提供结构化的 Markdown 报告：
       
-      ### ♟️ Structure & Imbalances
-      Analyze pawn structures, weak squares, and space. Who controls the center?
+      ### ♟️ 结构与不平衡性
+      分析兵形结构、弱点方格和空间。谁控制着中心？
 
-      ### ⚔️ Strategic Plans
-      What should White aim for? What should Black aim for? (e.g. Minority attack, Kingside storm).
+      ### ⚔️ 战略计划
+      白方的目标应该是什么？黑方的目标应该是什么？（例如：少数兵进攻、王翼风暴）。
 
-      ### 💡 Key Tactics & Threats
-      Any immediate tactical themes or traps to avoid.
+      ### 💡 关键战术与威胁
+      是否存在即时的战术主题或需要避免的陷阱。
       
-      ### 🎓 Grandmaster Verdict
-      Final evaluation of the position's dynamic potential.
+      ### 🎓 特级大师裁定
+      对局面动态潜力的最终评估。
     `;
   
     try {
@@ -297,10 +284,10 @@ export const getDeepAnalysis = async (fen: string, history: string[]): Promise<s
         config: { temperature: 0.7 }
       });
   
-      return response.text || "Analysis generation failed.";
+      return response.text || "分析生成失败。";
     } catch (error) {
       console.error("Error fetching deep analysis:", error);
-      return "Gemini 3 Deep Analysis unavailable.";
+      return "Gemini 深度分析暂时不可用。";
     }
   };
 
@@ -313,12 +300,12 @@ export const parseGameInput = async (input: string | File): Promise<string | nul
   const isImage = typeof input !== 'string';
 
   if (typeof input === 'string') {
-    contents = [{ text: `Convert this chess text/PGN/Move list to a FEN string. Return ONLY the FEN. Input: ${input}` }];
+    contents = [{ text: `将以下国际象棋文本/PGN/移动列表转换为 FEN 字符串。仅返回 FEN。输入: ${input}` }];
   } else {
     const base64Data = await fileToBase64(input);
     contents = [
         { inlineData: { mimeType: input.type, data: base64Data } },
-        { text: `Return a 8x8 character grid of this chess board. Use '.' for empty. Standard FEN chars (PNBRQK). Rank 8 on top.` }
+        { text: `返回此棋盘的 8x8 字符网格。使用 '.' 表示空位。使用标准 FEN 字符 (PNBRQK)。第 8 横线在最上方。` }
     ];
   }
 
